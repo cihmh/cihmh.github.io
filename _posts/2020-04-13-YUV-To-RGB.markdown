@@ -1,0 +1,103 @@
+---
+layout: post
+title:  "RGB TO YUV 4:2:0"
+date:   2020-04-13 10:41:42 +0900
+categories: ImageProcessing
+---
+
+#### <font color="black">Contents</font>
+
+- RGB & YUV
+- Why YUV
+- Math Formula
+- What is Chroma Subsampling?
+- Code Review
+ 
+### <font color="green">RGB & YUV</font>
+RGB는 말 그대로 색 그대로를 표현하는 방식이다. 
+그대로 표현하기 때문에 자세한 표현이 가능하지만, 용량이 크다.
+인간의 눈은 이미지의 밝기보다 상대적으로 색상에 대해 둔감하다.
+
+달리 말하면 색상정보가 조금 덜 해도 사람은 그 차이를 느끼지 못한다.
+이를 이용한 것이 YUV 포맷이다.
+빛의 삼원색을 표현하는 RGB와 달리 휘도(Y) 색 차(U,V)로 표현한다.
+
+### <font color="green">Why YUV</font>
+
+- 흰색: 255,255,255(RGB) 235,0,0(YUV)
+- 회색: 128,128,128(RGB) 128.0.0 (YUV)
+- 검정: 0,0,0(RGB) 16,0,0(YUV)
+
+흑백을 표현하기 위한 3가지 색상을 표현할 때 YUV 는 Y만으로 표현이 가능하다.
+이런 YUV 포맷은 RGB보다 압축률이 크게 향상되었으며 TV에서 많이 사용되었다.  
+특히 흑백 TV와 컬러TV가 공존했을 때 호환성 유지에 크게 기여했다.
+
+### <font color="green">Math Formula</font>
+
+<img src="{{ '/assets/img/yy.png' | prepend: site.baseurl }}" alt="">  
+<img src="{{ '/assets/img/uu.png' | prepend: site.baseurl }}" alt="">   
+<img src="{{ '/assets/img/vv.png' | prepend: site.baseurl }}" alt=""> 
+
+### <font color="green">What is Chroma Subsampling?</font>
+사람 눈은 밝기보다 색상정보에 둔감하다.  
+Y값은 그대로 쓰고 U와 V를 조절해서 더 큰 압축률을 가질 수 있다.  
+이를 U와 V에 대한 서브 샘플링이라고 한다.  
+대표적으로 아래와 같다.
+
+- YCbCr 4:4:4 format(YUV 444)
+- YCbCr 4:2:2 format(YUV 422)
+- YCbCr 4:2:0 format(YUV 420)
+- YCbCr 4:1:1 Format(YUV 411)
+
+### <font color="green">What is YUV 4:2:0?</font>
+서브 샘플링 중에서 가장 많이 쓰이는 YUV 4:2:0에 대해 알아보자  
+4개의 pixel을 표현하기 위해서 y4개와 u, v가 1개씩 필요하다.  
+8bit 기준으로 48bit가 필요하다.
+
+결국, Y는 이미지 해상도(width * height) 만큼 할당되고 u, v는 가로, 세로 절반씩
+U=(해상도*1/4), V=(해상도*1/4)이 할당된다.  
+즉 YUV 의 총 크기는 해상도*3 /2가 할당된다. 
+![memory](https://user-images.githubusercontent.com/32315877/79113265-7a27b380-7dbb-11ea-8f89-0e7d298b031b.png)
+
+
+### <font color="green">CODE REVIEW</font>
+RGB 파일을 읽어 와서 YUV 4:2:0으로 변환해 보자  
+1.Read한 RGB를 위에서 배운 공식을 사용하여 YUV로 변환한다.  
+2.각 Buffer에 저장한다.   
+(여기 까지 진행되면 YUV 4:4:4가 됩니다.)
+```c++
+    R = RGBBuffer[RGBIndex++];
+    G = RGBBuffer[RGBIndex++];
+    B = RGBBuffer[RGBIndex++];
+
+    Y = 0.299 * R + 0.587 * G + 0.114 * B + 0.5;
+    U = (-0.147 * R - 0.289 * G + 0.436 * B) / 0.872 + 128;
+    V = (0.615 * R - 0.515 * G - 0.100 * B) / 1.230 + 128;
+
+    YBuffer[YIndex] = static_cast<unsigned char>((Y < 0) ? 0 : ((Y > 255) ? 255 : Y));
+    temp_U[YIndex] = static_cast<unsigned char>((U < 0) ? 0 : ((U > 255) ? 255 : U));
+    temp_V[YIndex++] = static_cast<unsigned char>((V < 0) ? 0 : ((V > 255) ? 255 : V));
+```
+3.임시 메모리에 저장했던 U, V를  가로, 세로 의 절반의 크기를 가진 메모리로 옮겨준다.
+```c++
+for (int line = 0; line < height; line += 2)
+    {
+        int UVIndex = line * width / 4;
+        for (int pixel = 0; pixel < width; pixel += 2)
+        {
+            U = temp_U[line * width + pixel];
+            V = temp_V[line * width + pixel];
+            UBuffer[UVIndex] = U;
+            VBuffer[UVIndex++] = V;
+        }
+    }
+```
+4.아래와 같이 YUV 파일을 저장한 후 [<font color="green">rawpixels</font>](https://rawpixels.net) 에서 확인 한다.
+```c++
+    FILE *outputfile;
+    outputfile = fopen("./yuv420.yuv", "wb");
+    fwrite(yuvbuf, image_height * image_width * 3 / 2, 1, outputfile);
+``` 
+[<font color="red">이 소스는 학습용으로 만든 예제입니다.</font>]()\\
+[<font color="red">예제는 이해하기 쉽게 하기 위해 444로 만든 후 420으로 변환 하였습니다.</font>]()\\
+[<font color="green">Whole Source CODE</font>](https://github.com/cihmh/Imageprocessing)

@@ -1,0 +1,28 @@
+title: 흔한 개발자의 잡학 연구소
+description: Passionate,New and Creative
+
+url: http://cihmh.github.com
+baseurl: ""
+paginate_path: "blog/page:num/"
+permalink: blog/:title/
+
+markdown: kramdown
+highlighter: rouge
+plugins: [jekyll-paginate]
+paginate: 10
+
+navigation:
+  - title: Home
+    url: /index.html
+  - title: About
+    url: /about
+  #- title: Contact
+    #url: /contact
+
+social:
+  github: cihmh
+  twitter: 
+  facebook: 
+  email: root0607@gmail.com
+
+google_analytics: "UA-58263416-1"
